@@ -129,20 +129,40 @@ def process_video(video_path, angle_name="knee_angle", side="left", model_comple
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Usage: python mediapipe_extractor.py <video_path> [angle_name] [side]")
-        print("Example: python mediapipe_extractor.py test_clips/knee_extension.mp4 knee_angle left")
+        print("Usage: python mediapipe_extractor.py <video_path> [angle_name] [side] [complexity]")
+        print("Complexity options: 0 or 'lite' (Lite), 1 or 'full' (Full, default), 2 or 'heavy' (Heavy)")
+        print("Example: python mediapipe_extractor.py test_clips/armcycle.webm shoulder_angle left 0")
         sys.exit(1)
 
     video_path = sys.argv[1]
     angle_name = sys.argv[2] if len(sys.argv) > 2 else "knee_angle"
     side = sys.argv[3] if len(sys.argv) > 3 else "left"
+    
+    complexity_raw = sys.argv[4].lower() if len(sys.argv) > 4 else "1"
+    if complexity_raw in ["0", "lite"]:
+        complexity = 0
+        tag = "lite"
+    elif complexity_raw in ["2", "heavy"]:
+        complexity = 2
+        tag = "heavy"
+    else:
+        complexity = 1
+        tag = "full"
 
     os.makedirs("outputs", exist_ok=True)
-    df = process_video(video_path, angle_name, side)
-    out_path = f"outputs/mediapipe_{angle_name}.csv"
+    df = process_video(video_path, angle_name, side, model_complexity=complexity)
+    
+    if tag == "lite":
+        out_path = f"outputs/mediapipe_lite_{angle_name}.csv"
+    elif tag == "heavy":
+        out_path = f"outputs/mediapipe_heavy_{angle_name}.csv"
+    else:
+        out_path = f"outputs/mediapipe_{angle_name}.csv"
+
     df.to_csv(out_path, index=False)
-    print(f"Saved {len(df)} frames to {out_path}")
+    print(f"Saved {len(df)} frames to {out_path} (Model: MediaPipe Pose {tag.capitalize()})")
     if len(df) > 0 and "inference_ms" in df:
         mean_ms = df['inference_ms'].mean()
         fps = 1000 / mean_ms if mean_ms > 0 else 0
         print(f"Mean inference time: {mean_ms:.2f} ms ({fps:.1f} fps)")
+
