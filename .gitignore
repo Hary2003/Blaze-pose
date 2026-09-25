@@ -1,8 +1,33 @@
-# Virtual Environment
+# ==============================================================================
+# Git Ignore Configuration for Pose Estimation Benchmark (phyx-poc)
+# ==============================================================================
+
+# Video & Media Files (Excluded from repository)
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.webm
+*.flv
+*.wmv
+*.m4v
+*.mpg
+*.mpeg
+*.3gp
+test_clips/*.mp4
+test_clips/*.webm
+test_clips/*.mov
+test_clips/*.avi
+test_clips/*.mkv
+
+# Python Environment & Virtualenvs
 venv/
 .venv/
 env/
 ENV/
+env.bak/
+venv.bak/
+python/
 
 # Python Cache & Bytecode
 __pycache__/
@@ -10,10 +35,39 @@ __pycache__/
 *$py.class
 *.so
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+*.egg
+*.egg-info/
+dist/
+build/
 
-# OS and Editor files
+# Jupyter & IPython
+.ipynb_checkpoints/
+
+# OS-generated files
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
+desktop.ini
+
+# IDEs and Text Editors
 .idea/
 .vscode/
 *.swp
+*.swo
+*~
+*.sublime-project
+*.sublime-workspace
+
+# Logs and Temporary files
+*.log
+scratch/
+tmp/
+.temp/
