@@ -13,42 +13,52 @@ import matplotlib.pyplot as plt
 
 
 def load_results(angle_name):
+    """
+    Loads all available model extraction CSVs for the given angle_name.
+    Recognizes MoveNet, MediaPipe Full, MediaPipe Lite, etc.
+    """
+    models = {}
+    
     movenet_path = f"outputs/movenet_{angle_name}.csv"
+    if os.path.exists(movenet_path):
+        models["MoveNet Lightning"] = pd.read_csv(movenet_path)
+
     mediapipe_path = f"outputs/mediapipe_{angle_name}.csv"
+    if os.path.exists(mediapipe_path):
+        models["MediaPipe Full"] = pd.read_csv(mediapipe_path)
 
-    if not os.path.exists(movenet_path):
+    mediapipe_lite_path = f"outputs/mediapipe_lite_{angle_name}.csv"
+    if os.path.exists(mediapipe_lite_path):
+        models["MediaPipe Lite"] = pd.read_csv(mediapipe_lite_path)
+
+    mediapipe_heavy_path = f"outputs/mediapipe_heavy_{angle_name}.csv"
+    if os.path.exists(mediapipe_heavy_path):
+        models["MediaPipe Heavy"] = pd.read_csv(mediapipe_heavy_path)
+
+    if not models:
         raise FileNotFoundError(
-            f"Could not find MoveNet output at '{movenet_path}'.\n"
-            f"Please run the MoveNet extractor first:\n"
-            f"  python movenet_extractor.py <video_path> {angle_name} <side>"
-        )
-    if not os.path.exists(mediapipe_path):
-        raise FileNotFoundError(
-            f"Could not find MediaPipe output at '{mediapipe_path}'.\n"
-            f"Please run the MediaPipe extractor first:\n"
-            f"  python mediapipe_extractor.py <video_path> {angle_name} <side>"
+            f"No extracted outputs found in 'outputs/' for angle '{angle_name}'.\n"
+            f"Please run at least one extractor first:\n"
+            f"  python movenet_extractor.py <video_path> {angle_name} <side>\n"
+            f"  python mediapipe_extractor.py <video_path> {angle_name} <side> [0|1]"
         )
 
-    movenet_df = pd.read_csv(movenet_path)
-    mediapipe_df = pd.read_csv(mediapipe_path)
-    return movenet_df, mediapipe_df
+    return models
 
 
-def print_speed_comparison(movenet_df, mediapipe_df):
+def print_speed_comparison(models):
     print("\n=== INFERENCE SPEED ===")
-    for name, df in [("MoveNet", movenet_df), ("MediaPipe", mediapipe_df)]:
+    for name, df in models.items():
         if df.empty or "inference_ms" not in df:
             print(f"{name}: No frame timing data available.")
             continue
         mean_ms = df["inference_ms"].mean()
         fps = (1000 / mean_ms) if mean_ms > 0 else 0
-        print(f"{name}: {mean_ms:.2f} ms/frame avg  ({fps:.1f} fps)")
-    print("(Remember: this is on your laptop, not the target Android device.")
-    print(" Relative speed difference between models is still informative,")
-    print(" but absolute fps will be different/lower on-device.)")
+        print(f"{name:20}: {mean_ms:.2f} ms/frame avg  ({fps:.1f} fps)")
+    print("(Note: Measured on local host CPU. Relative speed difference remains informative.)")
 
 
-def print_stability(movenet_df, mediapipe_df, still_frame_range=None):
+def print_stability(models, still_frame_range=None):
     """
     Stability = how much the angle wobbles when the person should be
     roughly still (e.g. holding the bottom or top of a rep).
@@ -64,25 +74,35 @@ def print_stability(movenet_df, mediapipe_df, still_frame_range=None):
         return
 
     start, end = still_frame_range
-    for name, df in [("MoveNet", movenet_df), ("MediaPipe", mediapipe_df)]:
+    for name, df in models.items():
         segment = df[(df["frame"] >= start) & (df["frame"] <= end)]["angle"].dropna()
         if len(segment) > 1:
-            print(f"{name}: std-dev = {segment.std():.2f} degrees "
+            print(f"{name:20}: std-dev = {segment.std():.2f} degrees "
                   f"(lower = more stable, n={len(segment)} frames)")
         elif len(segment) == 1:
-            print(f"{name}: only 1 valid angle in frame range [{start}, {end}]")
+            print(f"{name:20}: only 1 valid angle in frame range [{start}, {end}]")
         else:
-            print(f"{name}: no valid angles found in frame range [{start}, {end}]")
+            print(f"{name:20}: no valid angles found in frame range [{start}, {end}]")
 
 
-def plot_angle_comparison(movenet_df, mediapipe_df, angle_name):
+def plot_angle_comparison(models, angle_name):
     os.makedirs("outputs", exist_ok=True)
     plt.figure(figsize=(12, 5))
-    plt.plot(movenet_df["frame"], movenet_df["angle"], label="MoveNet", alpha=0.8)
-    plt.plot(mediapipe_df["frame"], mediapipe_df["angle"], label="MediaPipe", alpha=0.8)
+    
+    style_map = {
+        "MoveNet Lightning": {"color": "#ff7f0e", "linestyle": "--", "alpha": 0.8},
+        "MediaPipe Full":    {"color": "#1f77b4", "linestyle": "-",  "alpha": 0.8},
+        "MediaPipe Lite":    {"color": "#2ca02c", "linestyle": "-.", "alpha": 0.8},
+        "MediaPipe Heavy":   {"color": "#9467bd", "linestyle": ":",  "alpha": 0.8},
+    }
+
+    for name, df in models.items():
+        st = style_map.get(name, {"linestyle": "-", "alpha": 0.7})
+        plt.plot(df["frame"], df["angle"], label=name, **st)
+
     plt.xlabel("Frame")
     plt.ylabel(f"{angle_name} (degrees)")
-    plt.title(f"{angle_name}: MoveNet vs MediaPipe")
+    plt.title(f"{angle_name}: Model Comparison ({', '.join(models.keys())})")
     plt.legend()
     plt.grid(alpha=0.3)
     out_path = f"outputs/{angle_name}_comparison.png"
@@ -90,15 +110,14 @@ def plot_angle_comparison(movenet_df, mediapipe_df, angle_name):
     plt.close()
     print(f"\nSaved plot to {out_path}")
     print("Look at this to:")
-    print("  1. Sanity-check both models are tracking the same movement pattern")
+    print("  1. Sanity-check models are tracking the same movement pattern")
     print("  2. Spot a 'still' segment to plug into print_stability()")
-    print("  3. Eyeball where the two models disagree most")
+    print("  3. Eyeball where models disagree most")
 
 
 if __name__ == "__main__":
     angle_name = sys.argv[1] if len(sys.argv) > 1 else "knee_angle"
 
-    # Support optional CLI still frame range: python compare.py knee_angle 40 70
     still_frame_range = None
     if len(sys.argv) >= 4:
         try:
@@ -106,11 +125,8 @@ if __name__ == "__main__":
         except ValueError:
             pass
 
-    movenet_df, mediapipe_df = load_results(angle_name)
-    print_speed_comparison(movenet_df, mediapipe_df)
+    models = load_results(angle_name)
+    print_speed_comparison(models)
+    print_stability(models, still_frame_range=still_frame_range)
+    plot_angle_comparison(models, angle_name)
 
-    # You can pass still_frame_range directly here or via CLI
-    # e.g., still_frame_range=(40, 70)
-    print_stability(movenet_df, mediapipe_df, still_frame_range=still_frame_range)
-
-    plot_angle_comparison(movenet_df, mediapipe_df, angle_name)
